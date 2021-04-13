@@ -2,6 +2,7 @@ package sample1
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type TransparentCache struct {
 	actualPriceService PriceService
 	maxAge             time.Duration
 	prices             map[string]float64
+	m                  sync.RWMutex
 }
 
 func NewTransparentCache(actualPriceService PriceService, maxAge time.Duration) *TransparentCache {
@@ -30,7 +32,9 @@ func NewTransparentCache(actualPriceService PriceService, maxAge time.Duration) 
 
 // GetPriceFor gets the price for the item, either from the cache or the actual service if it was not cached or too old
 func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
+	c.m.RLock()
 	price, ok := c.prices[itemCode]
+	c.m.RUnlock()
 	if ok {
 		// TODO: check that the price was retrieved less than "maxAge" ago!
 		return price, nil
@@ -39,7 +43,9 @@ func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("getting price from service : %v", err.Error())
 	}
+	c.m.Lock()
 	c.prices[itemCode] = price
+	c.m.Unlock()
 	return price, nil
 }
 
@@ -47,13 +53,18 @@ func (c *TransparentCache) GetPriceFor(itemCode string) (float64, error) {
 // If any of the operations returns an error, it should return an error as well
 func (c *TransparentCache) GetPricesFor(itemCodes ...string) ([]float64, error) {
 	results := []float64{}
+	wg := &sync.WaitGroup{}
+	var err error
 	for _, itemCode := range itemCodes {
-		// TODO: parallelize this, it can be optimized to not make the calls to the external service sequentially
-		price, err := c.GetPriceFor(itemCode)
-		if err != nil {
-			return []float64{}, err
-		}
-		results = append(results, price)
+		wg.Add(1)
+		go func(err error) {
+			defer wg.Done()
+			price, err := c.GetPriceFor(itemCode)
+			if err == nil {
+				results = append(results, price)
+			}
+		}(err)
 	}
+	wg.Wait()
 	return results, nil
 }
