@@ -12,4 +12,4 @@ lint:
 
 test: lint
 	@echo "===> Testing"
-	@go test -race -count=1 -covermode=atomic $(PACKAGES)
+	@go test -race -count=10 -covermode=atomic $(PACKAGES)
