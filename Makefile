@@ -1,4 +1,10 @@
+.PHONY:fmt lint test
+
 PACKAGES = $(shell go list ./...)
+
+fmt:
+	@echo "===> Formatting"
+	@go fmt $(PACKAGES)
 
 lint:
 	@echo "===> Linting with vet"
