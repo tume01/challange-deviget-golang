@@ -3,6 +3,7 @@ package sample1
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 )
@@ -17,11 +18,13 @@ type mockPriceService struct {
 	numCalls    int
 	mockResults map[string]mockResult // what price and err to return for a particular itemCode
 	callDelay   time.Duration         // how long to sleep on each call so that we can simulate calls to be expensive
+	mx          sync.RWMutex
 }
 
 func (m *mockPriceService) GetPriceFor(itemCode string) (float64, error) {
-
-	m.numCalls++            // increase the number of calls
+	m.mx.Lock()
+	m.numCalls++ // increase the number of calls
+	m.mx.Unlock()
 	time.Sleep(m.callDelay) // sleep to simulate expensive call
 
 	result, ok := m.mockResults[itemCode]
@@ -32,7 +35,10 @@ func (m *mockPriceService) GetPriceFor(itemCode string) (float64, error) {
 }
 
 func (m *mockPriceService) getNumCalls() int {
-	return m.numCalls
+	m.mx.RLock()
+	n := m.numCalls
+	m.mx.RUnlock()
+	return n
 }
 
 func getPriceWithNoErr(t *testing.T, cache *TransparentCache, itemCode string) float64 {
